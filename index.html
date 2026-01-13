@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>矫正胎龄计算器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .calculator-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-size: 22px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #dce4ec;
+            border-radius: 8px;
+            font-size: 16px;
+            color: #2c3e50;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        input::placeholder {
+            color: #bdc3c7;
+            font-size: 14px;
+        }
+
+        .btn-calculate {
+            width: 100%;
+            padding: 14px;
+            background-color: #3498db;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-bottom: 25px;
+        }
+
+        .btn-calculate:hover {
+            background-color: #2980b9;
+        }
+
+        .result-container {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #2ecc71;
+            display: none;
+        }
+
+        .result-title {
+            color: #27ae60;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .result-content {
+            color: #34495e;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+
+        .error-tip {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator-container">
+        <h1>矫正胎龄计算器</h1>
+
+        <div class="form-group">
+            <label for="birthDate">出生日期</label>
+            <input type="date" id="birthDate" placeholder="请选择或输入出生日期（格式：YYYY-MM-DD）">
+            <div class="error-tip" id="birthDateError">请填写有效的出生日期</div>
+        </div>
+
+        <div class="form-group">
+            <label for="gestationalAge">出生胎龄（格式：34 或 34+2）</label>
+            <input type="text" id="gestationalAge" placeholder="示例：34 或 34+2">
+            <div class="error-tip" id="gestationalAgeError">请填写有效的胎龄格式（如 34 或 34+2）</div>
+        </div>
+
+        <div class="form-group">
+            <label for="targetDate">目标日期</label>
+            <input type="date" id="targetDate" placeholder="请选择或输入目标日期（格式：YYYY-MM-DD）">
+            <div class="error-tip" id="targetDateError">请填写有效的目标日期，且不能早于出生日期</div>
+        </div>
+
+        <button class="btn-calculate" onclick="calculateCorrectedGestationalAge()">计算矫正胎龄</button>
+
+        <div class="result-container" id="resultContainer">
+            <div class="result-title">计算结果</div>
+            <div class="result-content" id="resultContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 胎龄转换为天数（对应原Python的gestational_age_to_days函数）
+        function gestationalAgeToDays(ageValue) {
+            if (!ageValue) return null;
+            const value = ageValue.trim();
+            // 匹配 34+2 格式
+            const matchPlus = /^(\d+)\+(\d+)$/.exec(value);
+            if (matchPlus) {
+                const weeks = parseInt(matchPlus[1], 10);
+                const days = parseInt(matchPlus[2], 10);
+                // 验证天数合理性（0-6）
+                if (days >= 0 && days <= 6) {
+                    return weeks * 7 + days;
+                }
+                return null;
+            }
+            // 匹配 34 格式（纯数字）
+            const matchWhole = /^(\d+)$/.exec(value);
+            if (matchWhole) {
+                const weeks = parseInt(matchWhole[1], 10);
+                return weeks * 7;
+            }
+            return null;
+        }
+
+        // 2. 天数转换回周+天格式（对应原Python的days_to_weeks_plus_days函数）
+        function daysToWeeksPlusDays(totalDays) {
+            if (isNaN(totalDays) || totalDays < 0) return null;
+            const weeks = Math.floor(totalDays / 7);
+            const extraDays = totalDays % 7;
+            return extraDays > 0 ? `${weeks}W+${extraDays}` : `${weeks}W`;
+        }
+
+        // 3. 计算两个日期之间的差值（天数）
+        function getDaysBetweenDates(startDate, endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            // 转换为时间戳（毫秒），计算差值后转换为天数
+            const timeDiff = end.getTime() - start.getTime();
+            return Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+        }
+
+        // 4. 核心计算函数（入口函数）
+        function calculateCorrectedGestationalAge() {
+            // 重置错误提示和结果容器
+            resetErrorTips();
+            document.getElementById("resultContainer").style.display = "none";
+
+            // 获取输入值
+            const birthDate = document.getElementById("birthDate").value;
+            const gestationalAge = document.getElementById("gestationalAge").value;
+            const targetDate = document.getElementById("targetDate").value;
+
+            // 验证1：出生日期不能为空
+            if (!birthDate) {
+                showError("birthDateError");
+                return;
+            }
+
+            // 验证2：出生胎龄格式有效
+            const birthGestationalDays = gestationalAgeToDays(gestationalAge);
+            if (birthGestationalDays === null) {
+                showError("gestationalAgeError");
+                return;
+            }
+
+            // 验证3：目标日期不能为空且不早于出生日期
+            if (!targetDate) {
+                showError("targetDateError");
+                return;
+            }
+            if (new Date(targetDate) < new Date(birthDate)) {
+                document.getElementById("targetDateError").innerText = "目标日期不能早于出生日期";
+                showError("targetDateError");
+                return;
+            }
+
+            // 核心计算逻辑
+            // 步骤1：计算出生日期到目标日期的差值（天数）
+            const daysBetweenBirthAndTarget = getDaysBetweenDates(birthDate, targetDate);
+
+            // 步骤2：计算目标日期对应的总胎龄天数（出生胎龄 + 日期差值）
+            const targetGestationalTotalDays = birthGestationalDays + daysBetweenBirthAndTarget;
+
+            // 步骤3：转换为周+天格式
+            const targetGestationalAge = daysToWeeksPlusDays(targetGestationalTotalDays);
+
+            // 步骤4：展示结果
+            const resultContent = document.getElementById("resultContent");
+            resultContent.innerHTML = `
+                出生日期：${formatDate(birthDate)}<br>
+                出生胎龄：${gestationalAge.toUpperCase()}（对应 ${birthGestationalDays} 天）<br>
+                目标日期：${formatDate(targetDate)}<br>
+                两者间隔：${daysBetweenBirthAndTarget} 天<br>
+                <br>
+                目标日期矫正胎龄：<strong>${targetGestationalAge}</strong>
+            `;
+            document.getElementById("resultContainer").style.display = "block";
+        }
+
+        // 辅助函数：格式化日期（YYYY-MM-DD → 年月日）
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, "0");
+            const day = date.getDate().toString().padStart(2, "0");
+            return `${year}年${month}月${day}日`;
+        }
+
+        // 辅助函数：显示错误提示
+        function showError(errorId) {
+            const errorElement = document.getElementById(errorId);
+            errorElement.style.display = "block";
+        }
+
+        // 辅助函数：重置所有错误提示
+        function resetErrorTips() {
+            const errorTips = document.querySelectorAll(".error-tip");
+            errorTips.forEach(tip => {
+                tip.style.display = "none";
+            });
+            // 重置目标日期错误提示文本
+            document.getElementById("targetDateError").innerText = "请填写有效的目标日期，且不能早于出生日期";
+        }
+    </script>
+</body>
+</html>
